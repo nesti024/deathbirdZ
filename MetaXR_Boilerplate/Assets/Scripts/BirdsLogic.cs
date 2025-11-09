@@ -1,83 +1,119 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class BirdsLogic : MonoBehaviour
 {
-    // Assign the bird GameObject (with SkinnedMeshRenderer) in the Inspector
-    public Transform bird;
-    // Assign the user's head (camera) in the Inspector, or leave null to auto-detect
+    public Transform birdPrefab;
     public Transform userHead;
-    // Assign the SkinnedMeshRenderer in the Inspector
-    public SkinnedMeshRenderer birdRenderer;
-    // Orbit parameters
-    public float orbitRadius = 2.0f;
-    public float orbitSpeed = 30.0f; // degrees per second
-    private float orbitAngle;
+    private float orbitRadius = 1f;
+    public float orbitSpeed = 30.0f;
+    public AudioBeatController audioController;
+    private float birdDiameter = 1.2f; // Set this to your bird's approximate width
 
-    // Blend shape animation parameters
-    private float blendShapeTimer = 0f;
-    private bool goingUp = true;
-    private const int blendShapeIndex = 1; // "key 1" is usually index 1
+    private List<Transform> birds = new List<Transform>();
+    private List<float> orbitAngles = new List<float>();
+
+    private const int blendShapeIndex = 1;
     private const float blendShapeMax = 100f;
     private const float blendShapeMin = 0f;
-    private const float blendShapeDuration = 1f; // 1 second up, 1 second down
+    private const float blendShapeDuration = 1f;
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
+    private int maxBirds;
+
     void Start()
     {
-        // Auto-assign user head if not set
         if (userHead == null && Camera.main != null)
-        {
             userHead = Camera.main.transform;
-        }
-        // Start at a random angle for variety
-        orbitAngle = Random.Range(0f, 360f);
+
+        // Calculate max birds needed to cover the sphere
+        float sphereArea = 4f * Mathf.PI * orbitRadius * orbitRadius;
+        float birdArea = Mathf.PI * Mathf.Pow(birdDiameter / 2f, 2);
+        maxBirds = Mathf.CeilToInt(sphereArea / birdArea);
+
+        Debug.Log($"[BirdsLogic] Max birds to cover sphere: {maxBirds}");
+
+        if (birdPrefab != null)
+            AddBird();
     }
 
-    // Update is called once per frame
     void Update()
     {
-        if (bird == null || userHead == null)
+        if (userHead == null || audioController == null || birdPrefab == null)
             return;
 
-        // Update orbit angle
-        orbitAngle += orbitSpeed * Time.deltaTime;
-        if (orbitAngle > 360f) orbitAngle -= 360f;
+        if (audioController == null) return;
 
-        // Calculate new position around the user's head
-        float radians = orbitAngle * Mathf.Deg2Rad;
-        Vector3 offset = new Vector3(Mathf.Cos(radians), 0.5f, Mathf.Sin(radians)) * orbitRadius;
-        bird.position = userHead.position + offset;
+        // Example: Use weighted energy as velocity
+        float velocity = Mathf.Clamp01(
+            0.6f * audioController.bass +
+            0.3f * audioController.mid +
+            0.1f * audioController.high
+        );
 
-        // Make the bird look at the user's head
-        bird.LookAt(userHead.position);
-
-        // Animate blend shape if renderer is assigned
-        if (birdRenderer != null)
+        if (velocity > 0.1f)
         {
-            AnimateBlendShape();
+            //if (birds.Count < maxBirds)
+            //{
+                AddBird();
+                AddBird();
+                AddBird();
+                AddBird();
+ //           }
+
+        }
+        // Spawn birds until the sphere is full
+  
+
+        // Update all birds' positions
+        for (int i = 0; i < birds.Count; i++)
+        {
+            // Clamp latitude to avoid poles (e.g., between 10 and 170 degrees)
+            float minPhi = Mathf.Deg2Rad * 10f;
+            float maxPhi = Mathf.Deg2Rad * 170f;
+            float t = (i + 0.5f) / birds.Count;
+            float phi = Mathf.Lerp(minPhi, maxPhi, t);
+
+            // Fibonacci longitude with slight random offset
+            float theta = Mathf.PI * (1 + Mathf.Sqrt(5)) * (i + 0.5f);
+
+            Vector3 dir = new Vector3(
+                Mathf.Cos(theta) * Mathf.Sin(phi),
+                Mathf.Cos(phi),
+                Mathf.Sin(theta) * Mathf.Sin(phi)
+            );
+
+            // Animate orbit
+            float angle = orbitAngles[i] += orbitSpeed * Time.deltaTime;
+            Quaternion rot = Quaternion.AngleAxis(angle, Vector3.up);
+            Vector3 offset = rot * dir * orbitRadius;
+
+            birds[i].position = userHead.position + offset;
+            birds[i].LookAt(userHead.position);
+
+            // Animate blend shape if renderer is assigned
+            var smr = birds[i].GetComponentInChildren<SkinnedMeshRenderer>();
+            if (smr != null)
+            {
+                //AnimateBlendShape(smr);
+            }
         }
     }
 
-    void AnimateBlendShape()
+    void AddBird()
     {
-        // Update timer
-        blendShapeTimer += Time.deltaTime;
-        float t = Mathf.Clamp01(blendShapeTimer / blendShapeDuration);
-        float value;
-        if (goingUp)
-        {
-            value = Mathf.Lerp(blendShapeMin, blendShapeMax, t);
-        }
-        else
-        {
-            value = Mathf.Lerp(blendShapeMax, blendShapeMin, t);
-        }
-        birdRenderer.SetBlendShapeWeight(blendShapeIndex, value);
+        Transform newBird = Instantiate(birdPrefab, userHead.position, Quaternion.identity, transform);
+        // Set scale to 1.2 for consistency
+        newBird.localScale = Vector3.one * 1.2f; 
+        //newBird.localScale = Vector3.one;
+        birds.Add(newBird);
+        orbitAngles.Add(Random.Range(0f, 360f));
+        Debug.Log($"[BirdsLogic] Bird spawned. Total birds: {birds.Count}");
+    }
 
-        if (blendShapeTimer >= blendShapeDuration)
-        {
-            blendShapeTimer = 0f;
-            goingUp = !goingUp;
-        }
+    void AnimateBlendShape(SkinnedMeshRenderer renderer)
+    {
+        float t = Mathf.PingPong(Time.time / blendShapeDuration, 1f);
+        float value = Mathf.Lerp(blendShapeMin, blendShapeMax, t);
+        renderer.SetBlendShapeWeight(blendShapeIndex, value);
     }
 }

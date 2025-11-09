@@ -9,7 +9,7 @@ public class Test : MonoBehaviour
 
     // OSC port and address
     public int oscPort = 6969;
-    public string oscAddress = "/test";
+    public string oscAddress = "/velocity";
 
     private OscJack.OscServer server;
     private float lastValue;
@@ -26,33 +26,20 @@ public class Test : MonoBehaviour
 
     void OnOscMessageReceived(string address, OscJack.OscDataHandle data)
     {
-        lock (valueLock)
-        {
+
             // Assume the value is a float
             lastValue = data.GetElementAsFloat(0);
-            valueUpdated = true;
-        }
+            
+            
+        
     }
 
     void Update()
     {
         if (textMeshPro != null)
         {
-            bool updated = false;
-            float value = 0f;
-            lock (valueLock)
-            {
-                if (valueUpdated)
-                {
-                    value = lastValue;
-                    updated = true;
-                    valueUpdated = false;
-                }
-            }
-            if (updated)
-            {
-                textMeshPro.text = value.ToString("F2");
-            }
+
+            textMeshPro.text = lastValue.ToString("F2");
         }
     }
 

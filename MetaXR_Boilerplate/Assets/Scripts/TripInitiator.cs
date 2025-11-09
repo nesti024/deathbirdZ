@@ -14,6 +14,8 @@ public class TripInitiator : MonoBehaviour
 
     private Coroutine intensityCoroutine;
 
+    public BirdsLogic birdsLogic;
+
     private void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag(playerTag) && passthroughControl != null)
