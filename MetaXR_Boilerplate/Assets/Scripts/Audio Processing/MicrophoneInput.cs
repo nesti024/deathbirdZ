@@ -34,6 +34,7 @@ public class MicrophoneInput : MonoBehaviour
             //while (!(Microphone.GetPosition(mic) > 0)) { }
             StartCoroutine(MicrophoneSyncCheck());
             source.loop = true;
+            // source.mute = true;
             source.Play();
         }
         else
